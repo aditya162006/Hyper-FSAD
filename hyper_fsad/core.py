@@ -15,40 +15,80 @@ def sparsemax(logits: Tensor, dim: int = -1) -> Tensor:
     if not torch.isfinite(logits).all():
         raise ValueError("logits must be finite")
     # Use float32 for a more stable threshold with half-precision inputs.
-    z = logits.float() if logits.dtype in (torch.float16, torch.bfloat16) else logits
-    z = z - z.amax(dim=dim, keepdim=True)
-    ordered = z.sort(dim=dim, descending=True).values
-    cumulative = ordered.cumsum(dim) - 1
-    shape = [1] * z.ndim
-    shape[dim] = z.shape[dim]
-    ranks = torch.arange(1, z.shape[dim] + 1, device=z.device, dtype=z.dtype).view(shape)
-    count = (ranks * ordered > cumulative).sum(dim=dim, keepdim=True)
-    threshold = cumulative.gather(dim, count - 1) / count
-    return (z - threshold).clamp_min(0)
+    shifted_scores = (
+        logits.float() if logits.dtype in (torch.float16, torch.bfloat16) else logits
+    )
+    # Subtracting the largest score keeps the numbers small without changing the weights.
+    shifted_scores = shifted_scores - shifted_scores.amax(dim=dim, keepdim=True)
+    # Sort the matches so we can find which ones are above the sparsemax cutoff.
+    sorted_scores = shifted_scores.sort(dim=dim, descending=True).values
+    cumulative_scores = sorted_scores.cumsum(dim) - 1
+    rank_shape = [1] * shifted_scores.ndim
+    rank_shape[dim] = shifted_scores.shape[dim]
+    support_ranks = torch.arange(
+        1,
+        shifted_scores.shape[dim] + 1,
+        device=shifted_scores.device,
+        dtype=shifted_scores.dtype,
+    ).view(rank_shape)
+    # Count the matches that will get a nonzero weight. The rest will be ignored.
+    active_count = (support_ranks * sorted_scores > cumulative_scores).sum(
+        dim=dim, keepdim=True
+    )
+    threshold = cumulative_scores.gather(dim, active_count - 1) / active_count
+    # Scores below the cutoff become zero; the remaining weights add up to one.
+    return (shifted_scores - threshold).clamp_min(0)
 
 
 @dataclass(frozen=True)
 class Features:
+    # Patch tokens describe small image regions. CLS tokens describe the whole image.
     patches: Tensor  # [layers, batch, patches, channels]
     cls: Tensor  # [layers, batch, channels]
     grid: tuple[int, int]
 
     def normalized(self) -> "Features":
-        p, c = self.patches, self.cls
-        if p.ndim != 4 or c.ndim != 3 or c.shape != p.shape[:2] + p.shape[3:]:
+        patch_tokens, cls_tokens = self.patches, self.cls
+        if (
+            patch_tokens.ndim != 4
+            or cls_tokens.ndim != 3
+            or cls_tokens.shape != patch_tokens.shape[:2] + patch_tokens.shape[3:]
+        ):
             raise ValueError("Expected patches [L,B,N,D] and CLS [L,B,D]")
-        if any(n == 0 for n in p.shape):
+        if any(dimension_size == 0 for dimension_size in patch_tokens.shape):
             raise ValueError("Feature dimensions must be nonempty")
-        if len(self.grid) != 2 or min(self.grid) < 1 or math.prod(self.grid) != p.shape[2]:
+        if (
+            len(self.grid) != 2
+            or min(self.grid) < 1
+            or math.prod(self.grid) != patch_tokens.shape[2]
+        ):
             raise ValueError("Grid must match patch count")
-        if p.device != c.device or p.dtype != c.dtype or not p.is_floating_point():
-            raise ValueError("Patch and CLS features must share floating dtype and device")
-        if not torch.isfinite(p).all() or not torch.isfinite(c).all():
+        if (
+            patch_tokens.device != cls_tokens.device
+            or patch_tokens.dtype != cls_tokens.dtype
+            or not patch_tokens.is_floating_point()
+        ):
+            raise ValueError(
+                "Patch and CLS features must share floating dtype and device"
+            )
+        if (
+            not torch.isfinite(patch_tokens).all()
+            or not torch.isfinite(cls_tokens).all()
+        ):
             raise ValueError("Features must be finite")
-        if (p.norm(dim=-1) == 0).any() or (c.norm(dim=-1) == 0).any():
+        if (patch_tokens.norm(dim=-1) == 0).any() or (
+            cls_tokens.norm(dim=-1) == 0
+        ).any():
             raise ValueError("Input tokens must have nonzero norms")
-        dtype = torch.float64 if p.dtype == torch.float64 else torch.float32
-        return Features(F.normalize(p.to(dtype), dim=-1), F.normalize(c.to(dtype), dim=-1), self.grid)
+        # Give every token length 1, so a dot product gives its cosine similarity.
+        feature_dtype = (
+            torch.float64 if patch_tokens.dtype == torch.float64 else torch.float32
+        )
+        return Features(
+            F.normalize(patch_tokens.to(feature_dtype), dim=-1),
+            F.normalize(cls_tokens.to(feature_dtype), dim=-1),
+            self.grid,
+        )
 
 
 @dataclass(frozen=True)
@@ -60,7 +100,10 @@ class Prediction:
 
     def resize_maps(self, size: tuple[int, int]) -> Tensor:
         """Resize the maps. Image scores still come from the patch grid."""
-        return F.interpolate(self.patch_map[:, None], size=size, mode="bilinear", align_corners=False)[:, 0]
+        # Interpolation needs a channel dimension, so add one and remove it afterward.
+        return F.interpolate(
+            self.patch_map[:, None], size=size, mode="bilinear", align_corners=False
+        )[:, 0]
 
 
 class HyperFSAD:
@@ -77,36 +120,79 @@ class HyperFSAD:
 
     @torch.inference_mode()
     def fit(self, support: Features) -> "HyperFSAD":
-        s = support.normalized()
-        self._memory = Features(s.patches.detach().clone(), s.cls.detach().clone(), s.grid)
+        support_features = support.normalized()
+        # Copy the normal features so changes to the original tensors cannot change our bank.
+        self._memory = Features(
+            support_features.patches.detach().clone(),
+            support_features.cls.detach().clone(),
+            support_features.grid,
+        )
         return self
 
     @torch.inference_mode()
     def predict(self, query: Features) -> Prediction:
         if self._memory is None:
             raise RuntimeError("Call fit with normal support features first")
-        q, s = query.normalized(), self._memory
-        if (q.patches.shape[0], q.patches.shape[-1]) != (s.patches.shape[0], s.patches.shape[-1]):
-            raise ValueError("Query and support must share layer count and feature dimension")
-        if q.patches.device != s.patches.device or q.patches.dtype != s.patches.dtype:
+        query_features, support_features = query.normalized(), self._memory
+        if (query_features.patches.shape[0], query_features.patches.shape[-1]) != (
+            support_features.patches.shape[0],
+            support_features.patches.shape[-1],
+        ):
+            raise ValueError(
+                "Query and support must share layer count and feature dimension"
+            )
+        if (
+            query_features.patches.device != support_features.patches.device
+            or query_features.patches.dtype != support_features.patches.dtype
+        ):
             raise ValueError("Query and support must share device and precision")
-        layers, batch, patches, channels = q.patches.shape
-        local = torch.zeros((batch, patches), device=q.patches.device, dtype=q.patches.dtype)
-        global_score = torch.zeros(batch, device=local.device, dtype=local.dtype)
-        for layer in range(layers):
-            memory = s.patches[layer].reshape(-1, channels)
-            flat_query = q.patches[layer].reshape(-1, channels)
-            distances = []
+        num_layers, batch_size, num_patches, feature_size = query_features.patches.shape
+        patch_scores = torch.zeros(
+            (batch_size, num_patches),
+            device=query_features.patches.device,
+            dtype=query_features.patches.dtype,
+        )
+        global_score = torch.zeros(
+            batch_size, device=patch_scores.device, dtype=patch_scores.dtype
+        )
+        # Each layer has its own normal memory and contributes equally to the final scores.
+        for layer_index in range(num_layers):
+            # Put patches from all normal images into one list for this layer.
+            support_patches = support_features.patches[layer_index].reshape(
+                -1, feature_size
+            )
+            query_patches = query_features.patches[layer_index].reshape(
+                -1, feature_size
+            )
+            chunk_distances = []
             # Split queries to save memory, but match each one against all support patches.
-            for chunk in flat_query.split(self.chunk_size):
-                weights = sparsemax(chunk @ memory.T)
-                reconstruction = weights @ memory
+            for query_chunk in query_patches.split(self.chunk_size):
+                # Compare every query patch with every normal patch, then apply sparsemax.
+                support_weights = sparsemax(query_chunk @ support_patches.T)
+                # The weighted normal patches form our guess of what this patch should look like.
+                reconstructed_patches = support_weights @ support_patches
                 # PyTorch handles a zero reconstruction with epsilon, giving distance 1.
-                distances.append((1 - F.cosine_similarity(chunk, reconstruction, dim=-1)).clamp(0, 2))
-            local += torch.cat(distances).reshape(batch, patches) / layers
-            nearest = (q.cls[layer] @ s.cls[layer].T).amax(dim=-1)
-            global_score += (1 - nearest).clamp(0, 2) / layers
-        patch_map = local.reshape(batch, *q.grid)
-        spatial = local.amax(dim=-1)
-        image = self.fusion_weight * spatial + (1 - self.fusion_weight) * global_score
-        return Prediction(patch_map, image, spatial, global_score)
+                chunk_distances.append(
+                    (
+                        1
+                        - F.cosine_similarity(
+                            query_chunk, reconstructed_patches, dim=-1
+                        )
+                    ).clamp(0, 2)
+                )
+            patch_scores += (
+                torch.cat(chunk_distances).reshape(batch_size, num_patches) / num_layers
+            )
+            # For the whole-image score, use the most similar normal CLS token.
+            nearest_cls_similarity = (
+                query_features.cls[layer_index] @ support_features.cls[layer_index].T
+            ).amax(dim=-1)
+            global_score += (1 - nearest_cls_similarity).clamp(0, 2) / num_layers
+        # Put the patch scores back into their image grid and take the highest local score.
+        patch_map = patch_scores.reshape(batch_size, *query_features.grid)
+        spatial_score = patch_scores.amax(dim=-1)
+        # The default gives equal importance to local defects and whole-image differences.
+        image_score = (
+            self.fusion_weight * spatial_score + (1 - self.fusion_weight) * global_score
+        )
+        return Prediction(patch_map, image_score, spatial_score, global_score)
