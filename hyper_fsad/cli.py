@@ -1,3 +1,9 @@
+"""Run the detector on folders of images and save its predictions.
+
+This is the entry point for the hyper-fsad terminal command. It connects file
+loading, feature extraction and anomaly scoring; it does not need test labels.
+"""
+
 import argparse
 import csv
 from pathlib import Path
@@ -63,7 +69,8 @@ def main():
         image_path.resolve() for image_path in query_paths
     ):
         parser.error("Support and query files overlap; use separate directories")
-    # Choose the normal references without picking the same image twice.
+    # The seed starts the random generator in the same state on repeated runs.
+    # replace=False means one image cannot fill two reference slots.
     selected_indices = np.random.default_rng(args.seed).choice(
         len(support_paths), args.shots, replace=False
     )
@@ -83,6 +90,7 @@ def main():
         torch.cat([image_features.cls for image_features in support_features], dim=1),
         support_features[0].grid,
     )
+    # fit stores the normal feature bank. Query images will only be compared with it.
     detector = HyperFSAD(chunk_size=args.chunk_size).fit(support_bank)
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -98,6 +106,7 @@ def main():
         for batch_start in range(0, len(query_paths), args.batch_size):
             batch_paths = query_paths[batch_start : batch_start + args.batch_size]
             images = [read_image(image_path) for image_path in batch_paths]
+            # First convert the images to features, then compare them with the bank.
             prediction = detector.predict(encoder(images))
             for image_index, (query_path, image) in enumerate(zip(batch_paths, images)):
                 # Keep the input subfolders so files with the same name do not overwrite each other.
@@ -116,6 +125,8 @@ def main():
                     mode="bilinear",
                     align_corners=False,
                 )[0, 0]
+                # Save numeric scores as a NumPy array, not a colored picture.
+                # This keeps the values available for later plotting or evaluation.
                 np.save(map_path, resized_map.cpu().numpy())
                 csv_writer.writerow(
                     [

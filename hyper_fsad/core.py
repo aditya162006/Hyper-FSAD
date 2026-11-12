@@ -9,7 +9,13 @@ from torch.nn import functional as F
 
 
 def sparsemax(logits: Tensor, dim: int = -1) -> Tensor:
-    """Sparsemax from Appendix A.5 of the paper."""
+    """Turn similarity scores into weights for the normal reference patches.
+
+    Each row usually contains the matches for one query patch. A large weight
+    means a reference patch contributes more to the reconstruction. Some weights
+    become exactly zero, so poor matches do not contribute at all. The weights
+    in a row add up to one. ``dim`` selects the axis containing the matches.
+    """
     if not logits.is_floating_point() or logits.numel() == 0:
         raise ValueError("sparsemax requires nonempty floating-point logits")
     if not torch.isfinite(logits).all():
@@ -22,7 +28,11 @@ def sparsemax(logits: Tensor, dim: int = -1) -> Tensor:
     shifted_scores = shifted_scores - shifted_scores.amax(dim=dim, keepdim=True)
     # Sort the matches so we can find which ones are above the sparsemax cutoff.
     sorted_scores = shifted_scores.sort(dim=dim, descending=True).values
+    # cumsum gives running totals: [a, b, c] becomes [a, a+b, a+b+c].
+    # Subtracting 1 is part of the formula that makes the final weights sum to 1.
     cumulative_scores = sorted_scores.cumsum(dim) - 1
+    # Make the ranks [1, 2, 3, ...] line up with the matching axis.
+    # The other dimensions have size 1 so PyTorch can reuse these ranks for every row.
     rank_shape = [1] * shifted_scores.ndim
     rank_shape[dim] = shifted_scores.shape[dim]
     support_ranks = torch.arange(
@@ -35,6 +45,8 @@ def sparsemax(logits: Tensor, dim: int = -1) -> Tensor:
     active_count = (support_ranks * sorted_scores > cumulative_scores).sum(
         dim=dim, keepdim=True
     )
+    # gather picks the running total at the last active match in each row.
+    # Indices start at 0 in Python, so match number k is at position k - 1.
     threshold = cumulative_scores.gather(dim, active_count - 1) / active_count
     # Scores below the cutoff become zero; the remaining weights add up to one.
     return (shifted_scores - threshold).clamp_min(0)
@@ -42,12 +54,22 @@ def sparsemax(logits: Tensor, dim: int = -1) -> Tensor:
 
 @dataclass(frozen=True)
 class Features:
+    """Keep the encoder's numeric image descriptions together.
+
+    A tensor is an array with several dimensions. Patch features use dimensions
+    [layer, image, patch, feature value]. CLS features leave out the patch
+    dimension because there is only one whole-image description per layer.
+    ``grid`` remembers the patch rows and columns so we can rebuild a map later.
+    """
+
     # Patch tokens describe small image regions. CLS tokens describe the whole image.
     patches: Tensor  # [layers, batch, patches, channels]
     cls: Tensor  # [layers, batch, channels]
     grid: tuple[int, int]
 
     def normalized(self) -> "Features":
+        # Check the shapes first. Combining incompatible arrays could mix up images
+        # or layers, so it is better to stop with an error than return wrong scores.
         patch_tokens, cls_tokens = self.patches, self.cls
         if (
             patch_tokens.ndim != 4
@@ -63,6 +85,8 @@ class Features:
             or math.prod(self.grid) != patch_tokens.shape[2]
         ):
             raise ValueError("Grid must match patch count")
+        # device tells us whether the data is on the CPU or GPU; dtype is the number format.
+        # Both token arrays must use the same device and format to work together.
         if (
             patch_tokens.device != cls_tokens.device
             or patch_tokens.dtype != cls_tokens.dtype
@@ -71,6 +95,7 @@ class Features:
             raise ValueError(
                 "Patch and CLS features must share floating dtype and device"
             )
+        # Reject NaN/infinity and all-zero tokens: they cannot give useful cosine matches.
         if (
             not torch.isfinite(patch_tokens).all()
             or not torch.isfinite(cls_tokens).all()
@@ -93,6 +118,13 @@ class Features:
 
 @dataclass(frozen=True)
 class Prediction:
+    """The detector's output for a batch of query images.
+
+    patch_map shows which regions look unusual. spatial_score is its largest
+    value, global_score comes from CLS matching, and image_score combines them.
+    These are distances from normal references, not defect probabilities.
+    """
+
     patch_map: Tensor  # [batch, grid height, grid width]
     image_score: Tensor  # [batch]
     spatial_score: Tensor
@@ -100,7 +132,10 @@ class Prediction:
 
     def resize_maps(self, size: tuple[int, int]) -> Tensor:
         """Resize the maps. Image scores still come from the patch grid."""
-        # Interpolation needs a channel dimension, so add one and remove it afterward.
+        # A batch is simply several images processed together.
+        # interpolate expects [batch, channels, height, width]. Our maps have no
+        # channel axis, so [:, None] adds a size-1 axis and [:, 0] removes it later.
+        # Bilinear interpolation fills the larger grid by blending nearby scores.
         return F.interpolate(
             self.patch_map[:, None], size=size, mode="bilinear", align_corners=False
         )[:, 0]
@@ -114,12 +149,18 @@ class HyperFSAD:
             raise ValueError("fusion_weight must lie in [0,1]")
         if not isinstance(chunk_size, int) or chunk_size < 1:
             raise ValueError("chunk_size must be a positive integer")
+        # fusion_weight controls how much the local score contributes (0.5 means half).
+        # chunk_size limits how many query patches we match at once, to save memory.
         self.fusion_weight = fusion_weight
         self.chunk_size = chunk_size
         self._memory: Features | None = None
 
+    # We only calculate outputs here, so PyTorch does not need to track gradients
+    # (the values used to update weights during training).
     @torch.inference_mode()
     def fit(self, support: Features) -> "HyperFSAD":
+        # Despite the name fit(), this does not train anything. It only prepares
+        # and stores descriptions of the normal images for later comparisons.
         support_features = support.normalized()
         # Copy the normal features so changes to the original tensors cannot change our bank.
         self._memory = Features(
@@ -133,6 +174,7 @@ class HyperFSAD:
     def predict(self, query: Features) -> Prediction:
         if self._memory is None:
             raise RuntimeError("Call fit with normal support features first")
+        # Normalize the new image descriptions the same way as the stored references.
         query_features, support_features = query.normalized(), self._memory
         if (query_features.patches.shape[0], query_features.patches.shape[-1]) != (
             support_features.patches.shape[0],
@@ -147,6 +189,7 @@ class HyperFSAD:
         ):
             raise ValueError("Query and support must share device and precision")
         num_layers, batch_size, num_patches, feature_size = query_features.patches.shape
+        # Start each score at zero. The loop below adds one contribution per layer.
         patch_scores = torch.zeros(
             (batch_size, num_patches),
             device=query_features.patches.device,
@@ -157,7 +200,9 @@ class HyperFSAD:
         )
         # Each layer has its own normal memory and contributes equally to the final scores.
         for layer_index in range(num_layers):
-            # Put patches from all normal images into one list for this layer.
+            # reshape changes the layout without changing the feature values.
+            # -1 asks PyTorch to calculate the row count. Normal images and their
+            # patches become one list, but every row still holds one full feature vector.
             support_patches = support_features.patches[layer_index].reshape(
                 -1, feature_size
             )
@@ -167,11 +212,17 @@ class HyperFSAD:
             chunk_distances = []
             # Split queries to save memory, but match each one against all support patches.
             for query_chunk in query_patches.split(self.chunk_size):
-                # Compare every query patch with every normal patch, then apply sparsemax.
+                # @ is matrix multiplication; .T swaps rows and columns.
+                # [query patches, features] @ [features, normal patches] produces
+                # one similarity for every query/reference pair. Tokens have length 1,
+                # so these dot products are cosine similarities.
                 support_weights = sparsemax(query_chunk @ support_patches.T)
                 # The weighted normal patches form our guess of what this patch should look like.
                 reconstructed_patches = support_weights @ support_patches
-                # PyTorch handles a zero reconstruction with epsilon, giving distance 1.
+                # Similarity is high for a good reconstruction. Subtract it from 1
+                # to make unusual patches score higher. dim=-1 means compare along
+                # the last axis (the feature values). clamp removes tiny rounding
+                # errors outside [0, 2]. A zero reconstruction gets distance 1.
                 chunk_distances.append(
                     (
                         1
@@ -180,6 +231,8 @@ class HyperFSAD:
                         )
                     ).clamp(0, 2)
                 )
+            # Join the chunks in their original order, then restore the image/patch
+            # axes. Dividing each layer's contribution by num_layers gives the mean.
             patch_scores += (
                 torch.cat(chunk_distances).reshape(batch_size, num_patches) / num_layers
             )

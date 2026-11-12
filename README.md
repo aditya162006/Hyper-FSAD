@@ -18,6 +18,218 @@ The model takes a few normal images as references and compares a new image again
 
 There is no fine-tuning, text prompt or training loop. `fit()` just stores the normal features. Higher scores mean the image differs more from the normal references; they are not probabilities.
 
+## Start here: the basic terms
+
+Imagine showing the program a photo of an undamaged bottle and then asking it to inspect another bottle. It compares the new image with what it saw in the normal one. It does not need examples of every possible defect.
+
+| Term | Meaning here |
+|---|---|
+| Support image / reference | A normal image used as an example of what is expected. |
+| Query image | The new image we want to inspect. |
+| Shot | One reference image. A 4-shot run uses four normal references. |
+| Encoder / backbone | The pretrained DINO network that turns an image into lists of numbers. |
+| Feature vector / token | A list of numbers describing visual information learned by DINO. |
+| Patch token | A feature associated with one small region of the image. It can also contain information from surrounding regions. |
+| CLS token | A special feature that summarizes the whole image. |
+| Layer | One processing stage inside DINO. We read four different stages. |
+| Tensor | A multidimensional array of numbers, like a table with extra dimensions. |
+| Memory bank | The stored features of the normal references, not a database of defect examples. |
+| Anomaly map | A grid of scores showing where the query differs from the references. |
+| Ground-truth mask | The dataset's answer image: marked pixels show the actual defects. It is used for evaluation, not prediction. |
+
+“Training-free” means we do not update the encoder for this task. DINO itself was already pretrained by its authors.
+
+## What each file does
+
+| File | What to look for |
+|---|---|
+| [`hyper_fsad/__init__.py`](hyper_fsad/__init__.py) | Makes the main classes available through imports such as `from hyper_fsad import HyperFSAD`. |
+| [`hyper_fsad/backbone.py`](hyper_fsad/backbone.py) | Loads DINO, prepares images, reads the selected layers, and separates patch features from the whole-image CLS features. |
+| [`hyper_fsad/core.py`](hyper_fsad/core.py) | Contains the method itself: `Features` stores tokens, `sparsemax()` finds matching weights, `HyperFSAD.fit()` stores normal references, `predict()` computes scores, and `Prediction` holds the output. |
+| [`hyper_fsad/cli.py`](hyper_fsad/cli.py) | Runs inference on image folders through `hyper-fsad`. It reads files, chooses references, calls the encoder and detector, then saves scores and maps. |
+| [`hyper_fsad/evaluate.py`](hyper_fsad/evaluate.py) | Runs `hyper-fsad-evaluate` on MVTec AD. It loads labels and masks, checks predictions against them, and saves metrics for each category and seed. |
+| [`tests/test_core.py`](tests/test_core.py) | Checks the matching and scoring math using small examples with known answers. |
+| [`tests/test_backbone.py`](tests/test_backbone.py) | Checks that the DINO adapters return the right token shapes and keep weights frozen. |
+| [`tests/test_cli.py`](tests/test_cli.py) | Runs folder inference with a tiny test checkpoint and checks the output files. |
+| [`tests/test_evaluate.py`](tests/test_evaluate.py) | Checks dataset loading, masks, metric calculations, and repeatable support selection. |
+| [`pyproject.toml`](pyproject.toml) | Lists package dependencies and connects the two terminal commands to their Python `main()` functions. |
+| [`requirements-tested.txt`](requirements-tested.txt) | Records the package versions used during testing. |
+| [`RESULTS.md`](RESULTS.md) | Explains the completed bottle experiments and their limitations. |
+| [`benchmarks/`](benchmarks/) | Contains one run JSON and one summary JSON for each tested backbone. Run files list every image prediction; summaries record settings, model revisions, and aggregate scores. |
+| [`.gitignore`](.gitignore) | Keeps generated outputs, local environments, credentials, datasets and weights out of Git. |
+| [`LICENSE`](LICENSE) | Gives the reuse terms for this implementation's code. |
+| [`README.md`](README.md) | This guide: project explanation, setup, commands and results. |
+
+Suggested reading order: this guide → `backbone.py` → `core.py` → `cli.py` → `evaluate.py`. The tests contain small examples that help explain the expected behavior.
+
+## Architecture: how the pieces connect
+
+Both reference and query images pass through the **same frozen encoder**. The two scoring branches then answer different questions: “Does a small region look unusual?” and “Does the whole image look unusual?”
+
+```mermaid
+flowchart TD
+    S[Normal reference images] --> P[Resize and normalize pixels]
+    Q[Query images] --> P
+    P --> E[Frozen DINO encoder: layers 3, 6, 9, 12]
+    E --> SP[Reference patch tokens]
+    E --> SC[Reference CLS tokens]
+    E --> QP[Query patch tokens]
+    E --> QC[Query CLS tokens]
+    SP --> N[L2-normalize tokens]
+    SC --> N
+    QP --> N
+    QC --> N
+    N --> M[Store reference tokens in layer-wise memory]
+    N --> L[Local branch: sparsemax patch matching]
+    M --> L
+    L --> R[Reconstruct query features from normal patches]
+    R --> D[Cosine distance, averaged over layers]
+    D --> A[Patch anomaly map]
+    A --> U[Upsample for saved maps and pixel evaluation]
+    A --> X[Maximum patch score]
+    N --> G[Global branch: nearest reference CLS distance]
+    M --> G
+    G --> V[Average over layers]
+    X --> F[Equal-weight fusion]
+    V --> F
+    F --> O[Image anomaly score]
+```
+
+The local branch uses patch tokens; the global branch uses CLS tokens. The shared normalization box applies to both kinds. Reference extraction is done once per support selection, and its memory is reused for all queries in that run. No query tokens are added to the normal bank.
+
+For the default DINOv3 model, a 448 × 448 image gives a 28 × 28 grid of 16-pixel patches, or **784 patch tokens per layer**. Each token has 768 numbers. With four selected layers:
+
+| Array | Shape | Meaning |
+|---|---|---|
+| Reference patches | `[4, K, 784, 768]` | Four layers, `K` normal images, 784 patches, 768 numbers per patch. |
+| Reference CLS | `[4, K, 768]` | One whole-image token per reference and layer. |
+| Query patches | `[4, B, 784, 768]` | `B` query images processed together. |
+| Patch memory for one layer | `[K × 784, 768]` | All normal patches for that layer in one list. |
+| Patch anomaly maps | `[B, 28, 28]` | One small score grid for each query. |
+| Image scores | `[B]` | One final score for each query. |
+
+## Algorithm in plain language
+
+1. **Choose normal examples.** Select `K` images from the normal training folder. The seed makes that random selection repeatable.
+2. **Describe the examples.** Run them through DINO, take the four selected layers, and store their normalized patch and CLS tokens.
+3. **Describe the query.** Apply the same image preparation and encoder to the new image.
+4. **Find useful normal patches.** At each layer, compare each query patch against every stored normal patch. Sparsemax gives useful matches weights and sets below-threshold matches to zero. Matching is not limited to the same position in the reference image.
+5. **Build a normal feature estimate.** Add up the reference patch features using those weights. This reconstructs a feature vector, not an RGB image.
+6. **Measure local differences.** Compare each query feature with its reconstruction. Average the distances over the four layers and arrange them into a grid.
+7. **Measure whole-image differences.** Compare the query CLS token with each normal CLS token, take the closest match at each layer, and average those distances.
+8. **Combine the scores.** Take the highest patch-grid score and average it with the whole-image score. Resize the map separately for saving or pixel evaluation.
+
+The code returns scores, not an automatic “defective/not defective” label. A practical application would need a threshold selected on suitable validation data.
+
+## Formulas, with explanations
+
+Notation: `K` is the number of normal images, `N` the patches per image, `M = K × N` the stored patches per layer, and `L = {3, 6, 9, 12}` the selected layers. A query patch is $q_t^l$, a stored normal patch is $p_i^l$, and a whole-image token is $c^l$. The superscript $l$ means “from layer $l$”, not a power. The symbol $\|v\|_2$ means the length of vector $v$.
+
+### 1. Normalize features and compare them
+
+For a nonzero feature vector:
+
+$$
+\bar v = \frac{v}{\|v\|_2}, \qquad
+\operatorname{cos}(a,b) = \frac{a^\top b}{\|a\|_2\|b\|_2}.
+$$
+
+Normalization makes the vector length one. We can then compare two normalized vectors with a dot product (multiply matching entries and add them):
+
+$$
+z_i = (\bar q_t^l)^\top \bar p_i^l.
+$$
+
+A higher cosine similarity means a more similar feature direction. The code uses `F.normalize()` and `query_chunk @ support_patches.T`. In the remaining formulas, patch and CLS tokens are already normalized.
+
+### 2. Sparsemax: choose a weighted set of matches
+
+Sort the similarities from largest to smallest as $z_{(1)},\ldots,z_{(M)}$. Find how many should keep a positive weight:
+
+$$
+k^* = \max\left\{k: 1 + k z_{(k)} > \sum_{j=1}^{k} z_{(j)}\right\}.
+$$
+
+Then calculate the cutoff and each weight:
+
+$$
+\tau = \frac{\sum_{j=1}^{k^*}z_{(j)} - 1}{k^*}, \qquad
+w_i = \max(z_i - \tau, 0).
+$$
+
+The weights are nonnegative and sum to one. For example, similarities `[0.8, 0.7, -0.5]` give weights `[0.55, 0.45, 0]`. The third patch contributes nothing. The number of retained patches is calculated from the scores, not set to a fixed number by us.
+
+This is `sparsemax()` in `core.py`, following Appendix A.5. The code first subtracts the maximum similarity for numerical stability; that shift does not change the final weights.
+
+### 3. Reconstruct a normal patch feature
+
+$$
+e_t^l = \sum_{i=1}^{M} w_i p_i^l.
+$$
+
+This is a weighted average of the stored normal features. In code, it is `support_weights @ support_patches`. If a query patch is unusual, its feature may differ from this normal estimate.
+
+### 4. Local anomaly score and map
+
+$$
+a_t = \frac{1}{|L|}\sum_{l\in L}\left[1-\operatorname{cos}(q_t^l,e_t^l)\right],
+\qquad S_{\mathrm{map}} = \max_t a_t.
+$$
+
+`1 - cosine similarity` turns similarity into a distance: identical directions give 0, perpendicular directions give 1, and opposite directions give 2. We average each patch's distance across the layers, reshape the scores into a map, and take the largest patch score for the local image score. This follows equation 9 and the paper's max pooling choice.
+
+A reconstruction can have zero length. The implementation uses PyTorch's epsilon-protected cosine calculation, which gives distance 1 for a zero reconstruction. Small numerical errors are clipped to the distance range `[0, 2]`.
+
+### 5. Global anomaly score
+
+$$
+S_{\mathrm{cls}} = \frac{1}{|L|}\sum_{l\in L}
+\left[1-\max_{k=1,\ldots,K}\operatorname{cos}(c_q^l,c_k^l)\right].
+$$
+
+For each layer, find the normal image whose CLS token is most similar to the query's. Convert that similarity to a distance, then average over layers. This is equation 4, implemented using `nearest_cls_similarity`.
+
+### 6. Final image score
+
+$$
+S_{\mathrm{image}} = \lambda S_{\mathrm{map}} + (1-\lambda)S_{\mathrm{cls}},
+\qquad \lambda=0.5.
+$$
+
+This is equation 5. If the local score is 0.6 and the global score is 0.2, the final score is 0.4. It is **not a 40% probability of a defect**.
+
+The heatmap is upsampled with bilinear interpolation, which blends neighboring grid scores. Upsampling makes the map larger; it does not create new model evidence or change the image score.
+
+### 7. How the reported metrics are calculated
+
+For a chosen threshold, a score above it is treated as anomalous. `TP` means correctly detected anomalies, `FP` means normal examples incorrectly flagged, and `FN` means missed anomalies.
+
+$$
+\mathrm{Precision}=\frac{TP}{TP+FP},\qquad
+\mathrm{Recall}=\frac{TP}{TP+FN},\qquad
+F_1=\frac{2\,\mathrm{Precision}\,\mathrm{Recall}}{\mathrm{Precision}+\mathrm{Recall}}.
+$$
+
+**Maximum F1** is the highest F1 over test-set score thresholds. It is an evaluation statistic, not a threshold learned for future data. The code handles zero denominators without producing NaNs.
+
+**Average precision (AP)** summarizes precision as recall increases:
+
+$$
+\mathrm{AP} = \sum_n (R_n-R_{n-1})P_n.
+$$
+
+Here $P_n$ and $R_n$ are precision and recall at successive thresholds ordered by increasing recall. AP is calculated by scikit-learn, not by averaging image scores.
+
+**AUROC** measures how often an anomalous example is ranked above a normal one, with half credit for equal scores:
+
+$$
+\mathrm{AUROC}=\Pr(s_{\mathrm{anomaly}}>s_{\mathrm{normal}})
++\tfrac12\Pr(s_{\mathrm{anomaly}}=s_{\mathrm{normal}}).
+$$
+
+Image metrics treat each image as one example. Pixel metrics treat each pixel as one example, using the resized anomaly maps and ground-truth masks. Normal test images contribute normal pixels too. We use scikit-learn for AUROC, AP and the precision-recall curve.
+
+
 ## Results so far
 
 Both runs used **one normal bottle image**, seed **0**, and all **83 test images** (20 normal and 63 defective). The selected reference was `bottle/train/good/177.png`.

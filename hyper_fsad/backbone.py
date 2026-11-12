@@ -9,6 +9,13 @@ from .core import Features
 
 
 class DinoV3Encoder:
+    """Convert pictures into features using a pretrained DINOv3 network.
+
+    The model supplies visual descriptions, not anomaly scores. core.py compares
+    those descriptions with normal references. We read several internal layers
+    because each stage can represent different visual information.
+    """
+
     model_type = "dinov3_vit"
 
     def __init__(
@@ -27,10 +34,13 @@ class DinoV3Encoder:
             raise ValueError(
                 "Layers must be unique one-based transformer block indices"
             )
+        # A patch is a small square of the input image. Require an exact number
+        # of patches across each side so the output can form a complete grid.
         self.patch_size = model.config.patch_size
         if image_size < self.patch_size or image_size % self.patch_size:
             raise ValueError("image_size must be a positive multiple of patch_size")
-        # Keep the pretrained weights fixed and turn off training behavior such as dropout.
+        # .to(device) chooses CPU or GPU. .eval() turns off training behavior.
+        # requires_grad_(False) freezes the weights; we do not learn new ones here.
         self.model = model.to(device).eval().requires_grad_(False)
         self.processor = processor
         self.layers = tuple(layers)
@@ -50,11 +60,15 @@ class DinoV3Encoder:
             **kwargs,
         )
 
+    # inference_mode avoids storing gradient information that is only needed for training.
     @torch.inference_mode()
     def __call__(self, images: Sequence[Image.Image]) -> Features:
         if not images:
             raise ValueError("At least one image is required")
-        # Keep the whole image so defects near the edges are not cropped out.
+        # RGB gives three color channels. The processor resizes images and applies
+        # the pixel scaling/normalization expected by this pretrained model.
+        # return_tensors="pt" asks for PyTorch arrays. Keep the whole image instead
+        # of cropping, since a defect might be near an edge.
         pixel_values = self.processor(
             images=[image.convert("RGB") for image in images],
             do_resize=True,
@@ -69,7 +83,9 @@ class DinoV3Encoder:
         # For example, 448 pixels with 16-pixel patches gives a 28 by 28 patch grid.
         grid_side = self.image_size // self.patch_size
         num_patches = grid_side * grid_side
-        # CLS is first. DINOv3 also has register tokens, which are not image patches.
+        # A token is a list of feature values. The first one (CLS) summarizes the image.
+        # Register tokens are extra internal model tokens with no image-grid location,
+        # so skip them before collecting the actual patch tokens.
         num_special_tokens = 1 + getattr(self.model.config, "num_register_tokens", 0)
         # Output 0 is the embedding stage; indices 3, 6, 9 and 12 are transformer blocks.
         selected_layer_outputs = [layer_outputs[layer] for layer in self.layers]
@@ -78,7 +94,9 @@ class DinoV3Encoder:
             for layer_tokens in selected_layer_outputs
         ):
             raise RuntimeError("Unexpected visual transformer token layout")
-        # Keep patch tokens and CLS tokens separately, with layers as the first dimension.
+        # [:, num_special_tokens:] keeps all images but skips CLS/register positions.
+        # [:, 0] takes just CLS. stack adds a new axis for the selected layers,
+        # giving patch shape [layers, images, patches, feature values].
         return Features(
             torch.stack(
                 [
@@ -96,6 +114,8 @@ class DinoV3Encoder:
 class DinoV2Encoder(DinoV3Encoder):
     """DINOv2 ViT-B/14 without register tokens, at 224x224 by default."""
 
+    # DINOv2 uses the same extraction steps. This subclass changes the model type,
+    # default input size and checkpoint instead of repeating all of that code.
     model_type = "dinov2"
 
     def __init__(

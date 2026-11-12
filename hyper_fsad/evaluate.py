@@ -21,6 +21,8 @@ from .core import Features, HyperFSAD
 
 @dataclass(frozen=True)
 class Sample:
+    # Keep an image path, its optional answer-mask path, and its image-level label
+    # together. anomalous=True means the dataset says the image contains a defect.
     image: Path
     mask: Path | None
     anomalous: bool
@@ -61,6 +63,8 @@ def load_category(root: Path, category: str):
 
 
 def binary_metrics(labels, scores):
+    # labels contain the known answers (0 normal, 1 anomalous); scores are predictions.
+    # reshape(-1) turns either image lists or pixel arrays into a single long list.
     labels, scores = np.asarray(labels).reshape(-1), np.asarray(scores).reshape(-1)
     if (
         labels.shape != scores.shape
@@ -82,6 +86,8 @@ def binary_metrics(labels, scores):
         out=np.zeros_like(precision),
         where=precision_plus_recall > 0,
     )
+    # AUROC checks ranking, AP summarizes precision versus recall, and maximum F1
+    # is the best precision/recall balance found on this test set. None is ordinary accuracy.
     return {
         "auroc": float(roc_auc_score(labels, scores)),
         "average_precision": float(average_precision_score(labels, scores)),
@@ -94,6 +100,8 @@ def evaluate_category(
 ):
     if shots < 1 or batch_size < 1:
         raise ValueError("shots and batch_size must be positive")
+    # This function handles one category and one random reference selection.
+    # An evaluation run has labels; ordinary inference in cli.py does not need them.
     root = Path(root)
     support_paths, test_samples = load_category(root, category)
     if len(support_paths) < shots:
@@ -119,6 +127,7 @@ def evaluate_category(
     for batch_start in range(0, len(test_samples), batch_size):
         sample_batch = test_samples[batch_start : batch_start + batch_size]
         images = [read_image(sample.image) for sample in sample_batch]
+        # The mask is not passed to the encoder or detector. It must not influence scores.
         prediction = detector.predict(encoder(images))
         for image_index, (sample, image) in enumerate(zip(sample_batch, images)):
             # Every pixel in a normal image gets label 0; defect masks mark anomalous pixels.
@@ -126,6 +135,7 @@ def evaluate_category(
                 ground_truth_mask = np.zeros((image.height, image.width), dtype=bool)
             else:
                 with Image.open(sample.mask) as mask_image:
+                    # Nonzero mask pixels mark defects. Convert them to True/False labels.
                     ground_truth_mask = np.asarray(mask_image.convert("L")) > 0
                 if ground_truth_mask.shape != (image.height, image.width):
                     raise ValueError(
@@ -179,7 +189,12 @@ def evaluate_category(
 
 
 def summarize(runs):
-    """Average over seeds first, then give each category equal weight."""
+    """Combine repeated experiments without favoring larger categories.
+
+    Each seed can select a different normal reference. The mean summarizes those
+    runs and the standard deviation shows how much they differ. We then average
+    category means, rather than pooling all images into one overall score.
+    """
     # First measure how the results vary with the normal reference selection.
     category_results = {}
     for category in sorted({run["category"] for run in runs}):
@@ -249,6 +264,7 @@ def main():
     args.model = args.model or DEFAULT_MODELS[args.backbone]
     encoder = load_encoder(args.backbone, args.model, device=args.device)
     args.output.mkdir(parents=True, exist_ok=True)
+    # Run each category with each requested seed and keep the individual results.
     evaluation_runs = []
     for category in args.categories:
         for seed in args.seeds:
