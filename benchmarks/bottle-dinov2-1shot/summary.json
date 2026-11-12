@@ -1,0 +1,85 @@
+{
+  "paper": "arXiv:2605.10628v2",
+  "model": "facebook/dinov2-base",
+  "config": {
+    "data": "data/mvtec",
+    "categories": [
+      "bottle"
+    ],
+    "shots": 1,
+    "seeds": [
+      0
+    ],
+    "batch_size": 1,
+    "chunk_size": 256,
+    "backbone": "dinov2",
+    "model": "facebook/dinov2-base",
+    "device": "cpu",
+    "output": "results/bottle-dinov2-1shot"
+  },
+  "protocol": {
+    "backbone": "dinov2",
+    "input_size": 224,
+    "layers": [
+      3,
+      6,
+      9,
+      12
+    ],
+    "fusion_weight": 0.5,
+    "pixel_resolution": "native",
+    "map_interpolation": "bilinear, align_corners=False",
+    "f1_max": "oracle test-set metric, not a deployment threshold",
+    "pro": "not implemented"
+  },
+  "versions": {
+    "torch": "2.15.0+cpu",
+    "numpy": "2.5.4"
+  },
+  "per_category": {
+    "bottle": {
+      "image_metrics": {
+        "auroc": {
+          "mean": 0.9936507936507937,
+          "std": 0.0
+        },
+        "average_precision": {
+          "mean": 0.9980400957552644,
+          "std": 0.0
+        },
+        "f1_max": {
+          "mean": 0.9763779527559054,
+          "std": 0.0
+        }
+      },
+      "pixel_metrics": {
+        "auroc": {
+          "mean": 0.9868307007837019,
+          "std": 0.0
+        },
+        "average_precision": {
+          "mean": 0.7986327570096563,
+          "std": 0.0
+        },
+        "f1_max": {
+          "mean": 0.7558976176330928,
+          "std": 0.0
+        }
+      }
+    }
+  },
+  "macro_mean": {
+    "image_metrics": {
+      "auroc": 0.9936507936507937,
+      "average_precision": 0.9980400957552644,
+      "f1_max": 0.9763779527559054
+    },
+    "pixel_metrics": {
+      "auroc": 0.9868307007837019,
+      "average_precision": 0.7986327570096563,
+      "f1_max": 0.7558976176330928
+    }
+  },
+  "std_convention": "population (ddof=0)",
+  "model_revision": "f9e44c814b77203eaa57a6bdbbd535f21ede1415"
+}

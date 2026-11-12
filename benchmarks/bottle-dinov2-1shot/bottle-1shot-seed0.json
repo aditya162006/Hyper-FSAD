@@ -1,0 +1,602 @@
+{
+  "category": "bottle",
+  "shots": 1,
+  "seed": 0,
+  "support_images": [
+    "bottle/train/good/177.png"
+  ],
+  "test_image_count": 83,
+  "image_metrics": {
+    "auroc": 0.9936507936507937,
+    "average_precision": 0.9980400957552644,
+    "f1_max": 0.9763779527559054
+  },
+  "pixel_metrics": {
+    "auroc": 0.9868307007837019,
+    "average_precision": 0.7986327570096563,
+    "f1_max": 0.7558976176330928
+  },
+  "predictions": [
+    {
+      "image": "bottle/test/broken_large/000.png",
+      "label": 1,
+      "score": 0.28416937589645386,
+      "spatial_score": 0.5153285264968872,
+      "global_score": 0.053010255098342896
+    },
+    {
+      "image": "bottle/test/broken_large/001.png",
+      "label": 1,
+      "score": 0.27580273151397705,
+      "spatial_score": 0.501070499420166,
+      "global_score": 0.050534963607788086
+    },
+    {
+      "image": "bottle/test/broken_large/002.png",
+      "label": 1,
+      "score": 0.2804791331291199,
+      "spatial_score": 0.49779629707336426,
+      "global_score": 0.06316196918487549
+    },
+    {
+      "image": "bottle/test/broken_large/003.png",
+      "label": 1,
+      "score": 0.3287048637866974,
+      "spatial_score": 0.5545436143875122,
+      "global_score": 0.10286609828472137
+    },
+    {
+      "image": "bottle/test/broken_large/004.png",
+      "label": 1,
+      "score": 0.25764578580856323,
+      "spatial_score": 0.48424726724624634,
+      "global_score": 0.03104427456855774
+    },
+    {
+      "image": "bottle/test/broken_large/005.png",
+      "label": 1,
+      "score": 0.2837487459182739,
+      "spatial_score": 0.5305957794189453,
+      "global_score": 0.03690168261528015
+    },
+    {
+      "image": "bottle/test/broken_large/006.png",
+      "label": 1,
+      "score": 0.29180237650871277,
+      "spatial_score": 0.5139968395233154,
+      "global_score": 0.0696079283952713
+    },
+    {
+      "image": "bottle/test/broken_large/007.png",
+      "label": 1,
+      "score": 0.29017430543899536,
+      "spatial_score": 0.5099272727966309,
+      "global_score": 0.07042133808135986
+    },
+    {
+      "image": "bottle/test/broken_large/008.png",
+      "label": 1,
+      "score": 0.2883690893650055,
+      "spatial_score": 0.5130295753479004,
+      "global_score": 0.06370861828327179
+    },
+    {
+      "image": "bottle/test/broken_large/009.png",
+      "label": 1,
+      "score": 0.25605309009552,
+      "spatial_score": 0.4736343026161194,
+      "global_score": 0.03847190737724304
+    },
+    {
+      "image": "bottle/test/broken_large/010.png",
+      "label": 1,
+      "score": 0.2804988622665405,
+      "spatial_score": 0.510469913482666,
+      "global_score": 0.050527796149253845
+    },
+    {
+      "image": "bottle/test/broken_large/011.png",
+      "label": 1,
+      "score": 0.24044206738471985,
+      "spatial_score": 0.4503247141838074,
+      "global_score": 0.030559420585632324
+    },
+    {
+      "image": "bottle/test/broken_large/012.png",
+      "label": 1,
+      "score": 0.26907825469970703,
+      "spatial_score": 0.49729859828948975,
+      "global_score": 0.040857911109924316
+    },
+    {
+      "image": "bottle/test/broken_large/013.png",
+      "label": 1,
+      "score": 0.28261566162109375,
+      "spatial_score": 0.5067272782325745,
+      "global_score": 0.05850405991077423
+    },
+    {
+      "image": "bottle/test/broken_large/014.png",
+      "label": 1,
+      "score": 0.27341097593307495,
+      "spatial_score": 0.49958980083465576,
+      "global_score": 0.04723212122917175
+    },
+    {
+      "image": "bottle/test/broken_large/015.png",
+      "label": 1,
+      "score": 0.281745970249176,
+      "spatial_score": 0.5116835832595825,
+      "global_score": 0.051808327436447144
+    },
+    {
+      "image": "bottle/test/broken_large/016.png",
+      "label": 1,
+      "score": 0.2885827124118805,
+      "spatial_score": 0.5112371444702148,
+      "global_score": 0.06592828035354614
+    },
+    {
+      "image": "bottle/test/broken_large/017.png",
+      "label": 1,
+      "score": 0.27060288190841675,
+      "spatial_score": 0.47625547647476196,
+      "global_score": 0.06495027244091034
+    },
+    {
+      "image": "bottle/test/broken_large/018.png",
+      "label": 1,
+      "score": 0.28797560930252075,
+      "spatial_score": 0.5143749117851257,
+      "global_score": 0.06157630681991577
+    },
+    {
+      "image": "bottle/test/broken_large/019.png",
+      "label": 1,
+      "score": 0.2933492660522461,
+      "spatial_score": 0.510895848274231,
+      "global_score": 0.07580271363258362
+    },
+    {
+      "image": "bottle/test/broken_small/000.png",
+      "label": 1,
+      "score": 0.24639606475830078,
+      "spatial_score": 0.4717663526535034,
+      "global_score": 0.02102576196193695
+    },
+    {
+      "image": "bottle/test/broken_small/001.png",
+      "label": 1,
+      "score": 0.25983569025993347,
+      "spatial_score": 0.49397456645965576,
+      "global_score": 0.025696799159049988
+    },
+    {
+      "image": "bottle/test/broken_small/002.png",
+      "label": 1,
+      "score": 0.25500014424324036,
+      "spatial_score": 0.4768633246421814,
+      "global_score": 0.03313694894313812
+    },
+    {
+      "image": "bottle/test/broken_small/003.png",
+      "label": 1,
+      "score": 0.257585734128952,
+      "spatial_score": 0.47213003039360046,
+      "global_score": 0.043041422963142395
+    },
+    {
+      "image": "bottle/test/broken_small/004.png",
+      "label": 1,
+      "score": 0.26323652267456055,
+      "spatial_score": 0.4884710907936096,
+      "global_score": 0.03800192475318909
+    },
+    {
+      "image": "bottle/test/broken_small/005.png",
+      "label": 1,
+      "score": 0.23992633819580078,
+      "spatial_score": 0.44779619574546814,
+      "global_score": 0.03205649554729462
+    },
+    {
+      "image": "bottle/test/broken_small/006.png",
+      "label": 1,
+      "score": 0.25453975796699524,
+      "spatial_score": 0.4794069230556488,
+      "global_score": 0.02967260777950287
+    },
+    {
+      "image": "bottle/test/broken_small/007.png",
+      "label": 1,
+      "score": 0.2365403175354004,
+      "spatial_score": 0.4472390413284302,
+      "global_score": 0.025841593742370605
+    },
+    {
+      "image": "bottle/test/broken_small/008.png",
+      "label": 1,
+      "score": 0.2678006887435913,
+      "spatial_score": 0.49292460083961487,
+      "global_score": 0.042676761746406555
+    },
+    {
+      "image": "bottle/test/broken_small/009.png",
+      "label": 1,
+      "score": 0.2458631545305252,
+      "spatial_score": 0.45927369594573975,
+      "global_score": 0.03245261311531067
+    },
+    {
+      "image": "bottle/test/broken_small/010.png",
+      "label": 1,
+      "score": 0.25833451747894287,
+      "spatial_score": 0.4770919680595398,
+      "global_score": 0.03957708179950714
+    },
+    {
+      "image": "bottle/test/broken_small/011.png",
+      "label": 1,
+      "score": 0.23745417594909668,
+      "spatial_score": 0.44853276014328003,
+      "global_score": 0.026375606656074524
+    },
+    {
+      "image": "bottle/test/broken_small/012.png",
+      "label": 1,
+      "score": 0.25556808710098267,
+      "spatial_score": 0.47846323251724243,
+      "global_score": 0.03267292678356171
+    },
+    {
+      "image": "bottle/test/broken_small/013.png",
+      "label": 1,
+      "score": 0.2457466721534729,
+      "spatial_score": 0.45935115218162537,
+      "global_score": 0.032142192125320435
+    },
+    {
+      "image": "bottle/test/broken_small/014.png",
+      "label": 1,
+      "score": 0.20089352130889893,
+      "spatial_score": 0.38364702463150024,
+      "global_score": 0.018140003085136414
+    },
+    {
+      "image": "bottle/test/broken_small/015.png",
+      "label": 1,
+      "score": 0.26013627648353577,
+      "spatial_score": 0.484424889087677,
+      "global_score": 0.03584764897823334
+    },
+    {
+      "image": "bottle/test/broken_small/016.png",
+      "label": 1,
+      "score": 0.2706456780433655,
+      "spatial_score": 0.503951370716095,
+      "global_score": 0.03733997046947479
+    },
+    {
+      "image": "bottle/test/broken_small/017.png",
+      "label": 1,
+      "score": 0.23814749717712402,
+      "spatial_score": 0.44596734642982483,
+      "global_score": 0.030327633023262024
+    },
+    {
+      "image": "bottle/test/broken_small/018.png",
+      "label": 1,
+      "score": 0.2625982165336609,
+      "spatial_score": 0.48550719022750854,
+      "global_score": 0.039689213037490845
+    },
+    {
+      "image": "bottle/test/broken_small/019.png",
+      "label": 1,
+      "score": 0.2749458849430084,
+      "spatial_score": 0.5072013139724731,
+      "global_score": 0.04269044101238251
+    },
+    {
+      "image": "bottle/test/broken_small/020.png",
+      "label": 1,
+      "score": 0.26674044132232666,
+      "spatial_score": 0.4991563558578491,
+      "global_score": 0.034324511885643005
+    },
+    {
+      "image": "bottle/test/broken_small/021.png",
+      "label": 1,
+      "score": 0.2372744381427765,
+      "spatial_score": 0.44360673427581787,
+      "global_score": 0.030942142009735107
+    },
+    {
+      "image": "bottle/test/contamination/000.png",
+      "label": 1,
+      "score": 0.25619253516197205,
+      "spatial_score": 0.4671410024166107,
+      "global_score": 0.04524405300617218
+    },
+    {
+      "image": "bottle/test/contamination/001.png",
+      "label": 1,
+      "score": 0.2452281415462494,
+      "spatial_score": 0.4632364511489868,
+      "global_score": 0.027219846844673157
+    },
+    {
+      "image": "bottle/test/contamination/002.png",
+      "label": 1,
+      "score": 0.1763993799686432,
+      "spatial_score": 0.3397565186023712,
+      "global_score": 0.013042226433753967
+    },
+    {
+      "image": "bottle/test/contamination/003.png",
+      "label": 1,
+      "score": 0.2323574721813202,
+      "spatial_score": 0.44282597303390503,
+      "global_score": 0.021888986229896545
+    },
+    {
+      "image": "bottle/test/contamination/004.png",
+      "label": 1,
+      "score": 0.21754850447177887,
+      "spatial_score": 0.4158444404602051,
+      "global_score": 0.01925256848335266
+    },
+    {
+      "image": "bottle/test/contamination/005.png",
+      "label": 1,
+      "score": 0.29523494839668274,
+      "spatial_score": 0.5366466641426086,
+      "global_score": 0.05382324755191803
+    },
+    {
+      "image": "bottle/test/contamination/006.png",
+      "label": 1,
+      "score": 0.2704872786998749,
+      "spatial_score": 0.5055239200592041,
+      "global_score": 0.03545065224170685
+    },
+    {
+      "image": "bottle/test/contamination/007.png",
+      "label": 1,
+      "score": 0.3566921353340149,
+      "spatial_score": 0.6245236396789551,
+      "global_score": 0.08886060118675232
+    },
+    {
+      "image": "bottle/test/contamination/008.png",
+      "label": 1,
+      "score": 0.2599572539329529,
+      "spatial_score": 0.47331446409225464,
+      "global_score": 0.04660007357597351
+    },
+    {
+      "image": "bottle/test/contamination/009.png",
+      "label": 1,
+      "score": 0.2328084260225296,
+      "spatial_score": 0.4372386634349823,
+      "global_score": 0.028378188610076904
+    },
+    {
+      "image": "bottle/test/contamination/010.png",
+      "label": 1,
+      "score": 0.2728521525859833,
+      "spatial_score": 0.5020431280136108,
+      "global_score": 0.04366116225719452
+    },
+    {
+      "image": "bottle/test/contamination/011.png",
+      "label": 1,
+      "score": 0.22546526789665222,
+      "spatial_score": 0.4235371947288513,
+      "global_score": 0.027393341064453125
+    },
+    {
+      "image": "bottle/test/contamination/012.png",
+      "label": 1,
+      "score": 0.19686594605445862,
+      "spatial_score": 0.3662562966346741,
+      "global_score": 0.027475610375404358
+    },
+    {
+      "image": "bottle/test/contamination/013.png",
+      "label": 1,
+      "score": 0.30305787920951843,
+      "spatial_score": 0.5326181650161743,
+      "global_score": 0.07349759340286255
+    },
+    {
+      "image": "bottle/test/contamination/014.png",
+      "label": 1,
+      "score": 0.3177306056022644,
+      "spatial_score": 0.5774121284484863,
+      "global_score": 0.058049097657203674
+    },
+    {
+      "image": "bottle/test/contamination/015.png",
+      "label": 1,
+      "score": 0.267653226852417,
+      "spatial_score": 0.5011405348777771,
+      "global_score": 0.03416590392589569
+    },
+    {
+      "image": "bottle/test/contamination/016.png",
+      "label": 1,
+      "score": 0.21424053609371185,
+      "spatial_score": 0.3991227149963379,
+      "global_score": 0.029358357191085815
+    },
+    {
+      "image": "bottle/test/contamination/017.png",
+      "label": 1,
+      "score": 0.327138215303421,
+      "spatial_score": 0.5848604440689087,
+      "global_score": 0.06941597163677216
+    },
+    {
+      "image": "bottle/test/contamination/018.png",
+      "label": 1,
+      "score": 0.3076520562171936,
+      "spatial_score": 0.5751294493675232,
+      "global_score": 0.040174633264541626
+    },
+    {
+      "image": "bottle/test/contamination/019.png",
+      "label": 1,
+      "score": 0.22577640414237976,
+      "spatial_score": 0.43142783641815186,
+      "global_score": 0.02012498676776886
+    },
+    {
+      "image": "bottle/test/contamination/020.png",
+      "label": 1,
+      "score": 0.19892877340316772,
+      "spatial_score": 0.37686479091644287,
+      "global_score": 0.020992755889892578
+    },
+    {
+      "image": "bottle/test/good/000.png",
+      "label": 0,
+      "score": 0.15882638096809387,
+      "spatial_score": 0.2997167110443115,
+      "global_score": 0.017936065793037415
+    },
+    {
+      "image": "bottle/test/good/001.png",
+      "label": 0,
+      "score": 0.2098928987979889,
+      "spatial_score": 0.40508049726486206,
+      "global_score": 0.014705285429954529
+    },
+    {
+      "image": "bottle/test/good/002.png",
+      "label": 0,
+      "score": 0.16896942257881165,
+      "spatial_score": 0.3188970685005188,
+      "global_score": 0.0190417617559433
+    },
+    {
+      "image": "bottle/test/good/003.png",
+      "label": 0,
+      "score": 0.12962859869003296,
+      "spatial_score": 0.24851351976394653,
+      "global_score": 0.010743662714958191
+    },
+    {
+      "image": "bottle/test/good/004.png",
+      "label": 0,
+      "score": 0.17429229617118835,
+      "spatial_score": 0.3247596323490143,
+      "global_score": 0.023824945092201233
+    },
+    {
+      "image": "bottle/test/good/005.png",
+      "label": 0,
+      "score": 0.14926326274871826,
+      "spatial_score": 0.28822779655456543,
+      "global_score": 0.0102987140417099
+    },
+    {
+      "image": "bottle/test/good/006.png",
+      "label": 0,
+      "score": 0.1523195505142212,
+      "spatial_score": 0.28905078768730164,
+      "global_score": 0.015588313341140747
+    },
+    {
+      "image": "bottle/test/good/007.png",
+      "label": 0,
+      "score": 0.16030541062355042,
+      "spatial_score": 0.3051169514656067,
+      "global_score": 0.01549386978149414
+    },
+    {
+      "image": "bottle/test/good/008.png",
+      "label": 0,
+      "score": 0.1235600933432579,
+      "spatial_score": 0.23636683821678162,
+      "global_score": 0.010753348469734192
+    },
+    {
+      "image": "bottle/test/good/009.png",
+      "label": 0,
+      "score": 0.1271374374628067,
+      "spatial_score": 0.23908387124538422,
+      "global_score": 0.015191003680229187
+    },
+    {
+      "image": "bottle/test/good/010.png",
+      "label": 0,
+      "score": 0.1827031373977661,
+      "spatial_score": 0.3498709797859192,
+      "global_score": 0.015535280108451843
+    },
+    {
+      "image": "bottle/test/good/011.png",
+      "label": 0,
+      "score": 0.13070353865623474,
+      "spatial_score": 0.2467162013053894,
+      "global_score": 0.014690861105918884
+    },
+    {
+      "image": "bottle/test/good/012.png",
+      "label": 0,
+      "score": 0.1312585175037384,
+      "spatial_score": 0.24870021641254425,
+      "global_score": 0.01381683349609375
+    },
+    {
+      "image": "bottle/test/good/013.png",
+      "label": 0,
+      "score": 0.1365067958831787,
+      "spatial_score": 0.2596457600593567,
+      "global_score": 0.013367816805839539
+    },
+    {
+      "image": "bottle/test/good/014.png",
+      "label": 0,
+      "score": 0.1618126481771469,
+      "spatial_score": 0.31137606501579285,
+      "global_score": 0.012249231338500977
+    },
+    {
+      "image": "bottle/test/good/015.png",
+      "label": 0,
+      "score": 0.19699060916900635,
+      "spatial_score": 0.3792850971221924,
+      "global_score": 0.014696121215820312
+    },
+    {
+      "image": "bottle/test/good/016.png",
+      "label": 0,
+      "score": 0.19319266080856323,
+      "spatial_score": 0.3750956654548645,
+      "global_score": 0.011289641261100769
+    },
+    {
+      "image": "bottle/test/good/017.png",
+      "label": 0,
+      "score": 0.13984769582748413,
+      "spatial_score": 0.2687852680683136,
+      "global_score": 0.010910123586654663
+    },
+    {
+      "image": "bottle/test/good/018.png",
+      "label": 0,
+      "score": 0.1600836217403412,
+      "spatial_score": 0.303669810295105,
+      "global_score": 0.016497433185577393
+    },
+    {
+      "image": "bottle/test/good/019.png",
+      "label": 0,
+      "score": 0.15606850385665894,
+      "spatial_score": 0.2905873656272888,
+      "global_score": 0.02154962718486786
+    }
+  ]
+}

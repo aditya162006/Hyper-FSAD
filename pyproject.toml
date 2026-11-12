@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hyper-fsad"
+version = "0.1.0"
+description = "Unofficial implementation of Hyper-FSAD, arXiv:2605.10628v2"
+requires-python = ">=3.10"
+dependencies = ["torch>=2.2", "torchvision>=0.17", "numpy>=1.24", "Pillow>=10", "transformers>=4.56,<5", "scikit-learn>=1.4"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+hyper-fsad = "hyper_fsad.cli:main"
+hyper-fsad-evaluate = "hyper_fsad.evaluate:main"
+
+[tool.setuptools.packages.find]
+include = ["hyper_fsad*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
